@@ -18,7 +18,8 @@ from dotenv import load_dotenv
 APP_DIR = Path(__file__).resolve().parent
 load_dotenv(APP_DIR / ".env")
 
-MODEL = "gpt-5.6"
+MODEL = "kimi-k2-0905-preview"
+KIMI_BASE_URL = "https://api.moonshot.ai/v1"
 DEMO_FILES = {
     "Sam Altman": APP_DIR / "TwExportly_sama_tweets_2026_07_14.csv",
     "Elon Musk": APP_DIR / "TwExportly_elonmusk_tweets_2026_07_14.csv",
@@ -150,11 +151,11 @@ for key, default in [
 
 
 def get_client() -> openai.OpenAI | None:
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = os.getenv("KIMI_API_KEY")
     if not api_key:
-        st.error("OPENAI_API_KEY not found. Add it to a `.env` file.")
+        st.error("KIMI_API_KEY not found. Add it to a `.env` file.")
         return None
-    return openai.OpenAI(api_key=api_key)
+    return openai.OpenAI(api_key=api_key, base_url=KIMI_BASE_URL)
 
 
 def chat_complete(messages: list[dict], *, json_mode: bool = False, max_tokens: int = 2000) -> str | None:
@@ -165,27 +166,16 @@ def chat_complete(messages: list[dict], *, json_mode: bool = False, max_tokens: 
     kwargs = {
         "model": MODEL,
         "messages": messages,
+        "max_tokens": max_tokens,
     }
     if json_mode:
         kwargs["response_format"] = {"type": "json_object"}
 
-    # gpt-5.x prefers max_completion_tokens; fall back for older SDKs/models
     try:
-        kwargs["max_completion_tokens"] = max_tokens
         response = client.chat.completions.create(**kwargs)
-    except TypeError:
-        kwargs.pop("max_completion_tokens", None)
-        kwargs["max_tokens"] = max_tokens
-        response = client.chat.completions.create(**kwargs)
-    except Exception as first_err:
-        # Some snapshots still want max_tokens
-        kwargs.pop("max_completion_tokens", None)
-        kwargs["max_tokens"] = max_tokens
-        try:
-            response = client.chat.completions.create(**kwargs)
-        except Exception as e:
-            st.error(f"OpenAI error: {e or first_err}")
-            return None
+    except Exception as e:
+        st.error(f"Kimi API error: {e}")
+        return None
 
     return response.choices[0].message.content
 
@@ -461,7 +451,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 st.markdown(
-    '<p class="hero-sub">Upload an export, chart engagement, then let GPT read the room.</p>',
+    '<p class="hero-sub">Upload an export, chart engagement, then let Kimi read the room.</p>',
     unsafe_allow_html=True,
 )
 
@@ -533,7 +523,7 @@ else:
 
     elif tab == "Vibe Report":
         st.subheader("Vibe report")
-        st.caption("GPT reads a mix of top-engagement and recent posts, then writes a strategist-style HTML brief.")
+        st.caption("Kimi reads a mix of top-engagement and recent posts, then writes a strategist-style HTML brief.")
         if st.button("Analyze my vibe", type="primary", use_container_width=True):
             with st.spinner(f"Asking {MODEL} to read the timeline…"):
                 result = analyze_vibe(df)
